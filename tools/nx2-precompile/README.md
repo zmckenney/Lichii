@@ -35,10 +35,24 @@ not stall while the driver compiles them.
    its classification, any other value for itself). Then the translation of the recorded environments
    is the one the game's state gives, so the pipeline is created with the kept infos and a worker
    builds it from the kept SPIR-V, which the driver finds compiled; the draw waits for it on the
-   scheduler thread, not on the GPU thread. A pipeline that is not predicted, or whose answers
-   differ, is translated as before, while the GPU thread waits. In Ocarina of Time this took the GPU
-   thread's time for the 628 pipelines of entering an area from 2.5 s to 0.25 s; translated live
-   with `EDEN_NX2_PRECOMPILED_AUDIT=1`, all 1,719 of two sessions gave the kept SPIR-V and infos.
+   scheduler thread, not on the GPU thread. In Ocarina of Time this took the GPU thread's
+   time for the 628 pipelines of entering an area from 2.5 s to 0.25 s; translated live with
+   `EDEN_NX2_PRECOMPILED_AUDIT=1`, all 1,719 of two sessions gave the kept SPIR-V and infos.
+5. A pipeline that is not predicted, or whose answers differ, is looked up per stage. A stage's
+   translation depends only on its program and environment, not on the pipeline, so its infos can
+   come from any precompiled pipeline that used the program: the first of the program's recorded
+   environments whose answers the game's state gives. (A stage with legacy attribute loads is the
+   exception: they are mapped to the previous stage's outputs, so it is not kept per stage.) With
+   every stage found, the pipeline is created with those infos and a worker translates the recorded
+   environments with the pipeline's own key (the SPIR-V depends on the key). A translation that
+   gives other infos fails the build, and the pipeline is translated again from the game's state.
+   Otherwise it is translated as before, while the GPU thread waits. Ocarina of Time keeps 43,757
+   stages by program and environment, and no program and environment gave different infos in two
+   pipelines. With every pipeline of a route looked up per stage
+   (`EDEN_NX2_PRECOMPILED_PER_STAGE=1`), the GPU thread spent 0.24 s on its 568 new pipelines and
+   draws waited 0.93 s for workers, against 2.03 s on the GPU thread translating them there; under
+   audit, all 561 precompiled ones gave their live translation's infos. On a route the recipe
+   predicted, as here, almost no pipeline needs this; it is for render states no recording saw.
 
 A native compute program's translation leaves out the accesses through a pointer slot that is null
 at the time, and the program is translated again once the game fills that slot
@@ -194,12 +208,15 @@ u64 offset and u64 size; per record u8 kind (0 graphics, 1 compute), u8 environm
 reserved, u32 environment indices in stage order, then the 1056-byte graphics or 24-byte compute key.
 Environments are stored once and shared by the records that use them.
 
-`precompiled_infos.fork-v<N>.bin`, written by the preparation step next to it: `NX2INFO3`, u32 stamp
+`precompiled_infos.fork-v<N>.bin`, written by the preparation step next to it: `NX2INFO4`, u32 stamp
 size and the stamp (`precompiled_prepared`'s line: the file, driver and build it was written for),
 u64 index offset, the blobs (a `Shader::SerializeInfo` info, or one zstd frame of a stage's SPIR-V
 words), then the index: u32 record count, u32 blob count, per record u64 key hash, u8 environment
 count, u8 kind (0 graphics, 1 compute: stage 0), 2 bytes 0, u32 environments[5], u32 info blobs[5],
-u32 SPIR-V blobs[5] (per pipeline stage, ~0 for none), and per blob u64 offset, u32 size, u32 0.
+u32 SPIR-V blobs[5] (per pipeline stage, ~0 for none), per blob u64 offset, u32 size, u32 0, and
+the stage table: u32 count, per graphics stage u64 program hash, u8 pipeline stage, 3 bytes 0, u32
+environment index and u32 info blob, once for each program and environment (one with legacy
+attribute loads, or whose infos differ between pipelines, is left out).
 Ocarina of Time: 753 MiB. The stamp holds the build's `scm_rev`: a build that changes the translator
 without a new revision needs `EDEN_NX2_PRECOMPILED_FORCE=1`, or its kept SPIR-V is the old one's.
 
@@ -217,6 +234,8 @@ without a new revision needs `EDEN_NX2_PRECOMPILED_FORCE=1`, or its kept SPIR-V 
   (the kept infos and SPIR-V unused), to compare.
 - `EDEN_NX2_PRECOMPILED_VERIFY=1`: a worker translates the recorded environments instead of using the
   kept SPIR-V, and fails the build when the infos differ from the kept ones.
+- `EDEN_NX2_PRECOMPILED_PER_STAGE=1`: look every graphics pipeline up per stage, also those the file
+  predicted, to test the per-stage lookup.
 - `EDEN_NX2_PRECOMPILED_AUDIT=1`: also translate each precompiled pipeline from the game's state on
   the GPU thread and compare its SPIR-V and infos with the kept ones (slow; counted in the log every
   10 s).

@@ -19,6 +19,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include "common/container/unordered_map.h"
 #include <vector>
@@ -297,9 +298,34 @@ private:
     /// the recorded environments): the GPU thread checks that the game's state now answers the
     /// recorded environments' questions as they were answered (FileEnvironment::AnswersHoldFor),
     /// so the kept translation is the one the game's state would give, instead of translating.
-    /// Null when the key is not precompiled, its answers differ, or its infos are missing.
+    /// A key that was not precompiled, or whose answers differ, is looked up per stage
+    /// (CreatePerStageGraphicsPipeline). Null when neither gives one. `matched` is set to the
+    /// record the pipeline was made from.
     std::unique_ptr<GraphicsPipeline> CreatePrecompiledGraphicsPipeline(
-        GraphicsEnvironments& environments);
+        GraphicsEnvironments& environments,
+        std::optional<PrecompiledRecord>* matched = nullptr);
+
+    /// A pipeline whose key was not precompiled, from each stage's kept info: the first of the
+    /// program's recorded environments (from any precompiled pipeline) whose answers the game's
+    /// state gives. A stage's translation depends only on its program and environment (stages
+    /// whose legacy attribute loads follow the previous stage are not kept per stage), so the
+    /// infos hold; a worker translates the recorded environments with this key (the SPIR-V
+    /// depends on the key), and a translation that gives other infos fails the build, which is
+    /// then replaced (ReplaceFailedPrecompiled). Null unless every stage is found, with `reason`
+    /// set to why (empty when found).
+    std::unique_ptr<GraphicsPipeline> CreatePerStageGraphicsPipeline(
+        GraphicsEnvironments& environments, std::optional<PrecompiledRecord>* matched,
+        std::string_view& reason);
+
+    /// The pipeline drawn with `infos`, built by a worker from the kept SPIR-V blobs or, without
+    /// them, by translating the recorded environments.
+    std::unique_ptr<GraphicsPipeline> MakePrecompiledGraphicsPipeline(
+        std::shared_ptr<std::vector<VideoCommon::FileEnvironment>> recorded,
+        const std::array<Shader::Info, 5>& infos, const std::array<bool, 5>& present,
+        const std::optional<std::array<std::pair<u64, u32>, 5>>& spirv_blobs);
+
+    /// Opens the precompiled file and the kept infos for reading, on the GPU thread.
+    void OpenPrecompiledFiles();
 
     /// EDEN_NX2_PRECOMPILED_AUDIT=1: a precompiled pipeline just created is also translated from
     /// the game's state, on the GPU thread, and its SPIR-V and infos compared with the kept ones
@@ -320,6 +346,13 @@ private:
         std::array<u32, 5> spirv{}; ///< Per pipeline stage: a SPIR-V blob (zstd), ~0U for none
     };
     std::unordered_map<u64, PrecompiledRecord> precompiled_records; ///< By key hash
+    struct PrecompiledStage {
+        u8 stage{};  ///< Pipeline stage
+        u32 env{};   ///< The precompiled file's environment
+        u32 info{};  ///< An info blob
+    };
+    /// Graphics stages by program hash, one for each recorded environment the program was kept in
+    std::unordered_multimap<u64, PrecompiledStage> precompiled_stages;
     /// By key hash; a compute key has a record for each storage pointer state it was prepared in
     std::unordered_multimap<u64, PrecompiledRecord> precompiled_compute_records;
     std::vector<std::pair<u64, u64>> precompiled_env_index;         ///< Offset, size
