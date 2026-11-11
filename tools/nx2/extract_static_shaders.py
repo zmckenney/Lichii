@@ -38,14 +38,16 @@ def walk_container(data, name, depth=0, dictionaries=None):
         for offset, bnsh in find_bnsh(data):
             yield from walk_container(bnsh, name + f"!BNSH@{offset:x}", depth + 1, dictionaries)
     elif magic == b"YB\x05\x00" and name.lower().endswith(
-            (".vsetb.byml", ".vsetb.byml.zs!zstd")):
+            (".vsetb.byml", ".vsetb.byml.zs!zstd", ".esetb.byml", ".esetb.byml.zs!zstd")):
         for offset, bnsh in find_embedded_bnsh(data):
             yield from walk_container(bnsh, name + f"!BNSH@{offset:x}", depth + 1, dictionaries)
     elif magic in (b"BNSH", b"CGSB", b"SHN!", b"BAHS"):
         parser = {b"BNSH": parse_bnsh, b"CGSB": parse_cgsb, b"SHN!": parse_shn, b"BAHS": parse_sharcb}[magic]
         for record in parser(data):
             yield {"member": name, **record}
-    elif name.lower().endswith((".json", ".presetb", ".meminfo", ".tex", ".byml", ".yaml", ".raw")):
+    elif name.lower().endswith((".json", ".presetb", ".meminfo", ".tex", ".byml", ".yaml", ".raw",
+                                # the rest of a layout archive (.blarc)
+                                ".bflan", ".bflyt", ".bntx", ".bushvt", ".glsl")):
         return
     else:
         raise ArchiveError(f"unsupported container magic {magic.hex()}")

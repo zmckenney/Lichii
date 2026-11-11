@@ -75,6 +75,8 @@ class ShaderArchiveTests(unittest.TestCase):
         records = list(walk_container(data, "effects.vsetb.byml"))
         self.assertEqual([record["stage"] for record in records], ["vertex", "compute"])
         self.assertTrue(records[0]["member"].endswith("!BNSH@10"))
+        esetb = list(walk_container(data, "static.Nin_Ounce_NVN2.esetb.byml.zs!zstd"))
+        self.assertEqual([record["stage"] for record in esetb], ["vertex", "compute"])
         self.assertEqual(list(walk_container(data, "unrelated.byml")), [])
         with self.assertRaises(ArchiveError):
             list(walk_container(data[:-1], "effects.vsetb.byml"))

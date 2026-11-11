@@ -230,7 +230,8 @@ TEST_CASE("ShaderPrecache: every container the archive walker reads is discovere
                              "Shader/Loose.bnsh.zs", "Shader/Bundle.cgsb", "Shader/Bundle.cgsb.zs",
                              "Shader/Program.shn", "Shader/Program.shn.zs", "Shader/Archive.sharcb",
                              "Shader/Archive.sharcb.zs", "Shader/UPPER.BNSH", "Effect/Fx.bfsha.zs",
-                             "Shaders/Model.bfsha.zst"}) {
+                             "Shaders/Model.bfsha.zst", "Layout/Count_00.nin_ounce_nvn2.blarc.zs",
+                             "Layout/Count_00.blarc"}) {
         INFO(path);
         REQUIRE(ClassifyGameFile(path) == GameFileKind::ShaderArchive);
     }

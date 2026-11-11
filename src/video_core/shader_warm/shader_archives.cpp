@@ -838,7 +838,9 @@ struct Walker {
         } else {
             const auto lower = Lower(name);
             for (const std::string_view skip :
-                 {".json", ".presetb", ".meminfo", ".tex", ".byml", ".yaml", ".raw"}) {
+                 {".json", ".presetb", ".meminfo", ".tex", ".byml", ".yaml", ".raw",
+                  // the rest of a layout archive (.blarc)
+                  ".bflan", ".bflyt", ".bntx", ".bushvt", ".glsl"}) {
                 if (EndsWith(lower, skip)) {
                     return;
                 }
@@ -907,7 +909,7 @@ GameFileKind ClassifyGameFile(std::string_view path) {
         lower.resize(lower.size() - 3);
     }
     for (const std::string_view extension :
-         {".bfsha", ".sarc", ".bnsh", ".cgsb", ".shn", ".sharcb"}) {
+         {".bfsha", ".sarc", ".bnsh", ".cgsb", ".shn", ".sharcb", ".blarc"}) {
         if (EndsWith(lower, extension)) {
             return GameFileKind::ShaderArchive;
         }
